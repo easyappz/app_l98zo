@@ -124,8 +124,9 @@ async function handleStartCommand(msg) {
   try {
     const chatId = msg.chat && msg.chat.id ? msg.chat.id : null;
     if (!chatId) return;
-    const text = 'Welcome!\nUse /pay to get an invoice and complete the payment.';
-    await bot.sendMessage(chatId, text);
+    const text = 'Добро пожаловать!\nНажмите «Оплатить» или отправьте команду /pay, чтобы получить счёт и завершить оплату.';
+    const options = { reply_markup: { inline_keyboard: [[{ text: 'Оплатить', callback_data: 'CMD_PAY' }]] } };
+    await bot.sendMessage(chatId, text, options);
   } catch (err) {
     console.error('[BotService] /start error:', err && err.message ? err.message : err);
   }
@@ -165,10 +166,9 @@ async function handlePayCommand(msg) {
     const now = dayjs();
     const activePending = await Payment.findOne({ chatId, status: 'pending', expiresAt: { $gt: now.toDate() } }).lean();
     if (activePending) {
-      await bot.sendMessage(
-        chatId,
-        'You already have an active pending payment. Please complete it or wait until it expires.\nЧтобы отменить текущую оплату, отправьте /cancel, затем используйте /pay для создания новой оплаты.'
-      );
+      const text = 'У вас уже есть активная ожидающая оплата. Пожалуйста, завершите её или дождитесь, пока срок действия истечёт.\nЧтобы отменить текущую оплату, нажмите «Отменить» ниже или отправьте /cancel, затем используйте /pay для создания новой оплаты.';
+      const options = { reply_markup: { inline_keyboard: [[{ text: 'Отменить', callback_data: 'CMD_CANCEL' }]] } };
+      await bot.sendMessage(chatId, text, options);
       return;
     }
 
@@ -374,6 +374,31 @@ async function start() {
         }
       } catch (error) {
         console.error('[BotService] message handler error:', error && error.message ? error.message : error);
+      }
+    });
+
+    // Handle inline button presses
+    bot.on('callback_query', async (query) => {
+      try {
+        if (!query) return;
+        const data = query.data;
+        if (data === 'CMD_PAY' && query.message && query.message.chat) {
+          await handlePayCommand({ chat: query.message.chat, from: query.from });
+        } else if (data === 'CMD_CANCEL' && query.message && query.message.chat) {
+          await handleCancelCommand({ chat: query.message.chat, from: query.from });
+        }
+        try {
+          await bot.answerCallbackQuery(query.id);
+        } catch (ackErr) {
+          console.error('[BotService] answerCallbackQuery error:', ackErr && ackErr.message ? ackErr.message : ackErr);
+        }
+      } catch (error) {
+        console.error('[BotService] callback_query error:', error && error.message ? error.message : error);
+        try {
+          await bot.answerCallbackQuery(query.id);
+        } catch (ackErr) {
+          console.error('[BotService] answerCallbackQuery error:', ackErr && ackErr.message ? ackErr.message : ackErr);
+        }
       }
     });
 
