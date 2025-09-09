@@ -1,0 +1,267 @@
+openapi: 3.0.0
+info:
+  title: Easyappz Telegram Payments Backend API
+  version: 1.0.0
+  description: |
+    Backend API for Telegram bot payments (YooKassa provider). No webhooks, polling logic will be added later.
+    This schema describes admin endpoints for settings, payments listing, and stats.
+servers:
+  - url: /api
+paths:
+  /settings:
+    get:
+      summary: Get current settings (creates with defaults if missing)
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Setting'
+              examples:
+                success:
+                  value:
+                    data:
+                      telegramBotToken: ""
+                      telegramProviderToken: ""
+                      currency: "RUB"
+                      priceAmount: 100
+                      paymentTitle: "Оплата"
+                      paymentDescription: "Оплата через Telegram"
+                      successMessage: "Оплата успешно получена!"
+                      updatedAt: "2025-01-01T00:00:00.000Z"
+    put:
+      summary: Update settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingUpdateInput'
+            examples:
+              example1:
+                value:
+                  telegramBotToken: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                  telegramProviderToken: "381764678:LIVE:1234567abcde"
+                  currency: "RUB"
+                  priceAmount: 19900
+                  paymentTitle: "Premium access"
+                  paymentDescription: "Access for 1 month"
+                  successMessage: "Thanks! Payment received."
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Setting'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /payments:
+    get:
+      summary: List payments with pagination
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, succeeded, canceled, expired]
+          description: Filter by payment status
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: A paginated list of payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  total:
+                    type: integer
+                  pages:
+                    type: integer
+              examples:
+                success:
+                  value:
+                    data:
+                      - chatId: "123456789"
+                        status: "pending"
+                        currency: "RUB"
+                        amount: 19900
+                        payload: "order-1001"
+                        title: "Premium access"
+                        description: "Access for 1 month"
+                        providerPaymentChargeId: null
+                        telegramPaymentChargeId: null
+                        invoiceMessageId: 45
+                        createdAt: "2025-01-01T10:00:00.000Z"
+                        expiresAt: "2025-01-01T10:10:00.000Z"
+                        updatedAt: "2025-01-01T10:00:00.000Z"
+                    page: 1
+                    limit: 20
+                    total: 1
+                    pages: 1
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stats:
+    get:
+      summary: Payments statistics
+      responses:
+        '200':
+          description: Statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      byStatus:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                        description: Keyed by status (pending|succeeded|canceled|expired)
+                      last24hCount:
+                        type: integer
+                      last7dCount:
+                        type: integer
+                      sumSucceeded:
+                        type: number
+              examples:
+                success:
+                  value:
+                    data:
+                      total: 10
+                      byStatus:
+                        pending: 2
+                        succeeded: 7
+                        canceled: 1
+                        expired: 0
+                      last24hCount: 4
+                      last7dCount: 9
+                      sumSucceeded: 120000
+components:
+  schemas:
+    Setting:
+      type: object
+      properties:
+        telegramBotToken:
+          type: string
+        telegramProviderToken:
+          type: string
+        currency:
+          type: string
+          default: RUB
+        priceAmount:
+          type: integer
+          description: Amount in minimal currency units (kopecks)
+          default: 100
+        paymentTitle:
+          type: string
+          default: "Оплата"
+        paymentDescription:
+          type: string
+          default: "Оплата через Telegram"
+        successMessage:
+          type: string
+          default: "Оплата успешно получена!"
+        updatedAt:
+          type: string
+          format: date-time
+    SettingUpdateInput:
+      type: object
+      properties:
+        telegramBotToken:
+          type: string
+        telegramProviderToken:
+          type: string
+        currency:
+          type: string
+        priceAmount:
+          type: integer
+        paymentTitle:
+          type: string
+        paymentDescription:
+          type: string
+        successMessage:
+          type: string
+    Payment:
+      type: object
+      properties:
+        chatId:
+          type: string
+        status:
+          type: string
+          enum: [pending, succeeded, canceled, expired]
+        currency:
+          type: string
+        amount:
+          type: number
+        payload:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        providerPaymentChargeId:
+          type: string
+        telegramPaymentChargeId:
+          type: string
+        invoiceMessageId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            stack:
+              type: string

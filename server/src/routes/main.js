@@ -1,34 +1,26 @@
 const express = require('express');
-const mongoose = require('mongoose');
-
-/**
- * Пример создания модели в базу данных
- */
-// const MongoTestSchema = new mongoose.Schema({
-//   value: { type: String, required: true },
-// });
-
-// const MongoModelTest = mongoose.model('Test', MongoTestSchema);
-
-// const newTest = new MongoModelTest({
-//   value: 'test-value',
-// });
-
-// newTest.save();
+const { getSettings, updateSettings } = require('@src/controllers/settingsController');
+const { listPayments, getStats } = require('@src/controllers/paymentsController');
 
 const router = express.Router();
 
-// GET /api/hello
+// Example routes
 router.get('/hello', (req, res) => {
   res.json({ message: 'Hello from API!' });
 });
 
-// GET /api/status
 router.get('/status', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    timestamp: new Date().toISOString()
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Settings
+router.get('/settings', getSettings);
+router.put('/settings', updateSettings);
+
+// Payments
+router.get('/payments', listPayments);
+
+// Stats
+router.get('/stats', getStats);
 
 module.exports = router;
