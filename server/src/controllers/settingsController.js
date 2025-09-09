@@ -19,7 +19,7 @@ async function updateSettings(req, res) {
     if (typeof body.telegramProviderToken === 'string') update.telegramProviderToken = body.telegramProviderToken;
     if (typeof body.title === 'string') update.title = body.title;
     if (typeof body.description === 'string') update.description = body.description;
-    if (typeof body.currency === 'string') update.currency = body.currency;
+    if (typeof body.currency === 'string') update.currency = body.currency.toUpperCase();
     if (typeof body.successMessage === 'string') update.successMessage = body.successMessage;
     if (body.amount !== undefined) {
       const num = Number(body.amount);

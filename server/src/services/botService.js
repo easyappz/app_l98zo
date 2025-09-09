@@ -24,7 +24,7 @@ function applyPlaceholders(template, amountMinor, currency) {
       out = out.split('{amount}').join(String(amountHuman));
     }
     if (out.indexOf('{currency}') !== -1) {
-      out = out.split('{currency}').join(String(currency || ''));
+      out = out.split('{currency}').join(String((currency || '').toString().toUpperCase()));
     }
     return out;
   } catch (e) {
@@ -36,6 +36,30 @@ async function loadSettings() {
   const doc = await Setting.findOne({}).lean();
   cachedSettings = doc || null;
   return cachedSettings;
+}
+
+function buildTelegramPriceData(settings) {
+  const currencyRaw = settings && settings.currency ? String(settings.currency) : '';
+  const currency3 = currencyRaw.trim().toUpperCase();
+  if (!currency3 || currency3.length !== 3) {
+    const err = new Error('Invalid currency. Must be 3 uppercase letters.');
+    err.code = 'VALIDATION_CURRENCY';
+    throw err;
+  }
+
+  const amountNum = Number(settings && settings.amount);
+  const amountInt = Math.trunc(amountNum);
+  if (!Number.isFinite(amountNum) || amountInt <= 0 || amountNum !== amountInt) {
+    const err = new Error('Invalid amount. Must be a positive integer in minor units.');
+    err.code = 'VALIDATION_AMOUNT';
+    throw err;
+  }
+
+  let label = (settings && settings.title ? String(settings.title) : 'Payment').trim();
+  if (!label) label = 'Payment';
+  if (label.length > 32) label = label.slice(0, 32);
+
+  return { amountInt, currency3, label };
 }
 
 async function handleStartCommand(msg) {
@@ -62,6 +86,24 @@ async function handlePayCommand(msg) {
       return;
     }
 
+    let amountInt, currency3, label;
+    try {
+      const validated = buildTelegramPriceData(settings);
+      amountInt = validated.amountInt;
+      currency3 = validated.currency3;
+      label = validated.label;
+    } catch (valErr) {
+      const code = valErr && valErr.code ? valErr.code : '';
+      if (code === 'VALIDATION_AMOUNT') {
+        await bot.sendMessage(chatId, 'Некорректная сумма. Укажите целое число в минорных единицах (например, копейках) больше 0.');
+      } else if (code === 'VALIDATION_CURRENCY') {
+        await bot.sendMessage(chatId, 'Некорректная валюта. Используйте 3 заглавные буквы (например, RUB, USD, EUR).');
+      } else {
+        await bot.sendMessage(chatId, 'Настройки оплаты некорректны. Обратитесь к администратору.');
+      }
+      return;
+    }
+
     const now = dayjs();
     const activePending = await Payment.findOne({ chatId, status: 'pending', expiresAt: { $gt: now.toDate() } }).lean();
     if (activePending) {
@@ -75,37 +117,54 @@ async function handlePayCommand(msg) {
     const payload = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const expiresAt = now.add(10, 'minute').toDate();
 
+    const invoiceTitle = label; // keep within 32 chars
+
     const payment = await Payment.create({
       chatId,
       userId,
       payload,
       status: 'pending',
       expiresAt,
-      title: settings.title,
-      description: settings.description,
-      currency: settings.currency,
-      amount: settings.amount,
+      title: invoiceTitle,
+      description: (settings.description || 'Pay for the service'),
+      currency: currency3,
+      amount: amountInt,
     });
 
-    const prices = [{ label: settings.title || 'Payment', amount: settings.amount }];
+    const prices = [{ label: label, amount: amountInt }];
 
-    const message = await bot.sendInvoice(
-      chatId,
-      settings.title || 'Payment',
-      settings.description || 'Pay for the service',
-      payment.payload,
-      settings.telegramProviderToken,
-      'pay',
-      settings.currency || 'RUB',
-      prices,
-      {
-        need_name: false,
-        need_phone_number: false,
+    try {
+      const message = await bot.sendInvoice(
+        chatId,
+        invoiceTitle,
+        (settings.description || 'Pay for the service'),
+        payment.payload,
+        settings.telegramProviderToken,
+        'pay',
+        currency3,
+        prices,
+        {
+          need_name: false,
+          need_phone_number: false,
+        }
+      );
+
+      if (message && message.message_id) {
+        await Payment.updateOne({ _id: payment._id }, { $set: { invoiceMessageId: message.message_id, updatedAt: new Date() } });
       }
-    );
-
-    if (message && message.message_id) {
-      await Payment.updateOne({ _id: payment._id }, { $set: { invoiceMessageId: message.message_id, updatedAt: new Date() } });
+    } catch (errSend) {
+      const context = {
+        currency: currency3,
+        amountInt,
+        amountType: typeof amountInt,
+        label,
+        prices: JSON.stringify(prices),
+      };
+      console.error('[BotService] sendInvoice error:', errSend && errSend.message ? errSend.message : errSend, context);
+      await bot.sendMessage(
+        chatId,
+        'Не удалось создать счёт. Проверьте валюту (3 заглавные буквы), сумму (целое число в минорных единицах) и название (до 32 символов). Администратору: см. логи сервера.'
+      );
     }
   } catch (err) {
     console.error('[BotService] /pay error:', err && err.message ? err.message : err);
@@ -186,7 +245,7 @@ async function handleSuccessfulPayment(msg) {
     await payment.save();
 
     const template = settings && settings.successMessage ? settings.successMessage : 'Payment received: {amount} {currency}. Thank you!';
-    const text = applyPlaceholders(template, payment.amount || (settings && settings.amount) || 0, payment.currency || (settings && settings.currency) || '');
+    const text = applyPlaceholders(template, payment.amount || (settings && settings.amount) || 0, (payment.currency || (settings && settings.currency) || ''));
     await bot.sendMessage(chatId, text);
   } catch (err) {
     console.error('[BotService] successful_payment error:', err && err.message ? err.message : err);
