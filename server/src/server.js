@@ -6,6 +6,8 @@ const helmet = require('helmet');
 const mongoose = require('mongoose');
 
 const apiRoutes = require('@src/routes/main');
+const { BotService } = require('@src/services/botService');
+const paymentExpiryService = require('@src/services/paymentExpiryService');
 
 const app = express();
 
@@ -15,12 +17,24 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
-// MongoDB connection
+// MongoDB connection and services init
 (async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    // Connected successfully
     console.log('[MongoDB] Connected successfully');
+
+    // Init services after successful DB connection
+    try {
+      await BotService.init();
+    } catch (e) {
+      console.error('[Server] BotService init error:', e && e.message ? e.message : e);
+    }
+
+    try {
+      paymentExpiryService.start();
+    } catch (e) {
+      console.error('[Server] paymentExpiryService start error:', e && e.message ? e.message : e);
+    }
   } catch (err) {
     console.error('[MongoDB] Connection error:', err && err.message ? err.message : err);
   }

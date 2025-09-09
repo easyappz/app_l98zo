@@ -4,19 +4,13 @@ const SettingSchema = new mongoose.Schema(
   {
     telegramBotToken: { type: String, default: '' },
     telegramProviderToken: { type: String, default: '' },
+    title: { type: String, default: 'Payment' },
+    description: { type: String, default: 'Pay for the service' },
     currency: { type: String, default: 'RUB' },
-    priceAmount: { type: Number, default: 100 }, // minimal units
-    paymentTitle: { type: String, default: 'Оплата' },
-    paymentDescription: { type: String, default: 'Оплата через Telegram' },
-    successMessage: { type: String, default: 'Оплата успешно получена!' },
-    updatedAt: { type: Date },
+    amount: { type: Number, default: 10000 }, // in minor units (e.g., kopeks)
+    successMessage: { type: String, default: 'Payment received: {amount} {currency}. Thank you!' },
   },
-  { collection: 'settings' }
+  { timestamps: true }
 );
-
-SettingSchema.pre('save', function (next) {
-  this.updatedAt = new Date();
-  next();
-});
 
 module.exports = mongoose.model('Setting', SettingSchema);

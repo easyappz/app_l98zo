@@ -1,67 +1,47 @@
 const Setting = require('@src/models/Setting');
-
-// Helper: apply updates with basic type checks
-function applySettingUpdates(setting, payload) {
-  if (!payload || typeof payload !== 'object') return setting;
-
-  const {
-    telegramBotToken,
-    telegramProviderToken,
-    currency,
-    priceAmount,
-    paymentTitle,
-    paymentDescription,
-    successMessage,
-  } = payload;
-
-  if (typeof telegramBotToken === 'string') setting.telegramBotToken = telegramBotToken;
-  if (typeof telegramProviderToken === 'string') setting.telegramProviderToken = telegramProviderToken;
-  if (typeof currency === 'string' && currency.trim()) setting.currency = currency.trim().toUpperCase();
-
-  if (priceAmount !== undefined) {
-    if (typeof priceAmount !== 'number' || !Number.isInteger(priceAmount) || priceAmount < 1) {
-      const err = new Error('priceAmount must be a positive integer (minimal currency units).');
-      err.status = 400;
-      throw err;
-    }
-    setting.priceAmount = priceAmount;
-  }
-
-  if (typeof paymentTitle === 'string') setting.paymentTitle = paymentTitle;
-  if (typeof paymentDescription === 'string') setting.paymentDescription = paymentDescription;
-  if (typeof successMessage === 'string') setting.successMessage = successMessage;
-
-  return setting;
-}
+const { BotService } = require('@src/services/botService');
 
 async function getSettings(req, res) {
   try {
-    let setting = await Setting.findOne();
-    if (!setting) {
-      setting = new Setting({});
-      await setting.save();
-    }
-    return res.json({ data: setting });
+    const doc = await Setting.findOne({});
+    res.json({ data: doc });
   } catch (err) {
-    return res.status(err.status || 500).json({ error: { message: err.message, stack: err.stack } });
+    res.status(500).json({ error: { message: err && err.message ? err.message : 'Failed to get settings' } });
   }
 }
 
 async function updateSettings(req, res) {
   try {
-    let setting = await Setting.findOne();
-    if (!setting) setting = new Setting({});
+    const body = req.body || {};
 
-    applySettingUpdates(setting, req.body);
-    await setting.save();
+    const update = {};
+    if (typeof body.telegramBotToken === 'string') update.telegramBotToken = body.telegramBotToken;
+    if (typeof body.telegramProviderToken === 'string') update.telegramProviderToken = body.telegramProviderToken;
+    if (typeof body.title === 'string') update.title = body.title;
+    if (typeof body.description === 'string') update.description = body.description;
+    if (typeof body.currency === 'string') update.currency = body.currency;
+    if (typeof body.successMessage === 'string') update.successMessage = body.successMessage;
+    if (body.amount !== undefined) {
+      const num = Number(body.amount);
+      if (!Number.isFinite(num) || num <= 0) {
+        return res.status(400).json({ error: { message: 'amount must be a positive number of minor currency units' } });
+      }
+      update.amount = Math.round(num);
+    }
 
-    return res.json({ data: setting });
+    const saved = await Setting.findOneAndUpdate({}, { $set: update }, { new: true, upsert: true, setDefaultsOnInsert: true });
+
+    try {
+      await BotService.reconfigure(saved.toObject());
+    } catch (e) {
+      // Do not crash on reconfigure
+      console.error('[settingsController] reconfigure error:', e && e.message ? e.message : e);
+    }
+
+    res.json({ data: saved });
   } catch (err) {
-    return res.status(err.status || 500).json({ error: { message: err.message, stack: err.stack } });
+    res.status(500).json({ error: { message: err && err.message ? err.message : 'Failed to update settings' } });
   }
 }
 
-module.exports = {
-  getSettings,
-  updateSettings,
-};
+module.exports = { getSettings, updateSettings };
