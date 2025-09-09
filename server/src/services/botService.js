@@ -65,7 +65,10 @@ async function handlePayCommand(msg) {
     const now = dayjs();
     const activePending = await Payment.findOne({ chatId, status: 'pending', expiresAt: { $gt: now.toDate() } }).lean();
     if (activePending) {
-      await bot.sendMessage(chatId, 'You already have an active pending payment. Please complete it or wait until it expires.');
+      await bot.sendMessage(
+        chatId,
+        'You already have an active pending payment. Please complete it or wait until it expires.\nЧтобы отменить текущую оплату, отправьте /cancel, затем используйте /pay для создания новой оплаты.'
+      );
       return;
     }
 
@@ -106,6 +109,40 @@ async function handlePayCommand(msg) {
     }
   } catch (err) {
     console.error('[BotService] /pay error:', err && err.message ? err.message : err);
+  }
+}
+
+async function handleCancelCommand(msg) {
+  try {
+    const chatId = msg.chat && msg.chat.id ? msg.chat.id : null;
+    if (!chatId) return;
+
+    const now = dayjs();
+    const activePayments = await Payment.find({ chatId, status: 'pending', expiresAt: { $gt: now.toDate() } }).lean();
+
+    if (!activePayments || activePayments.length === 0) {
+      await bot.sendMessage(chatId, 'Активной ожидающей оплаты не найдено.');
+      return;
+    }
+
+    for (const p of activePayments) {
+      if (p && p.invoiceMessageId) {
+        try {
+          await bot.deleteMessage(chatId, p.invoiceMessageId);
+        } catch (delErr) {
+          console.error('[BotService] /cancel delete invoice error:', delErr && delErr.message ? delErr.message : delErr);
+        }
+      }
+      try {
+        await Payment.updateOne({ _id: p._id }, { $set: { status: 'failed', updatedAt: new Date() } });
+      } catch (updErr) {
+        console.error('[BotService] /cancel update payment error:', updErr && updErr.message ? updErr.message : updErr);
+      }
+    }
+
+    await bot.sendMessage(chatId, 'Текущая оплата отменена. Вы можете вызвать /pay для новой оплаты.');
+  } catch (err) {
+    console.error('[BotService] /cancel error:', err && err.message ? err.message : err);
   }
 }
 
@@ -185,6 +222,10 @@ async function start() {
         }
         if (text === '/pay') {
           await handlePayCommand(msg);
+          return;
+        }
+        if (text === '/cancel') {
+          await handleCancelCommand(msg);
           return;
         }
 
