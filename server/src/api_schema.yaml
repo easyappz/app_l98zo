@@ -35,22 +35,25 @@ paths:
                 title:
                   type: string
                   maxLength: 32
-                  description: Invoice title (and position label baseline). Max 32 characters.
+                  description: |
+                    Invoice title. Max 32 characters. Will also be used as price item label.
+                    Allowed characters: latin/cyrillic letters, digits, space, hyphen, dot, comma, colon, underscore.
+                    New lines are not allowed and will be replaced by spaces.
                 description:
                   type: string
                 currency:
                   type: string
                   example: RUB
-                  description: Three uppercase letters ISO-4217 code (e.g., RUB, USD, EUR).
+                  description: Three uppercase letters ISO-4217 code (e.g., RUB, USD, EUR). Must be exactly 3 uppercase letters.
                   pattern: '^[A-Z]{3}$'
                 amount:
                   type: integer
                   minimum: 1
-                  description: Amount in minor units (e.g., kopeks). Must be a positive integer.
+                  description: Amount in minor units (e.g., kopeks). Must be a positive integer (> 0).
                 successMessage:
                   type: string
-                  description: Supports placeholders {amount} (major units) and {currency}.
-                  example: 'Payment received: {amount} {currency}. Thank you!'
+                  description: |
+                    Supports placeholders {amount} (major units) and {currency}. Example: "Payment received: {amount} {currency}. Thank you!"
       responses:
         '200':
           description: Saved settings
@@ -154,17 +157,18 @@ components:
         title:
           type: string
           maxLength: 32
-          description: Max 32 characters.
+          description: |
+            Max 32 characters. Used as invoice title and price item label. No line breaks. Allowed: latin/cyrillic letters, digits, space, hyphen, dot, comma, colon, underscore.
         description:
           type: string
         currency:
           type: string
-          description: Three uppercase letters ISO-4217 code (e.g., RUB, USD, EUR).
+          description: Three uppercase letters ISO-4217 code (e.g., RUB, USD, EUR). Must be exactly 3 uppercase letters.
           pattern: '^[A-Z]{3}$'
         amount:
           type: integer
           minimum: 1
-          description: Amount in minor units (positive integer).
+          description: Amount in minor units (positive integer > 0).
         successMessage:
           type: string
           description: Supports placeholders {amount} (major units) and {currency}.

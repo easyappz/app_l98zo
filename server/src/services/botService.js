@@ -38,15 +38,72 @@ async function loadSettings() {
   return cachedSettings;
 }
 
+// Sanitization helpers for Telegram invoice fields.
+// We do not use RegExp. We only allow: latin/cyrillic letters, digits, space, hyphen, dot, comma, colon, underscore.
+function isUppercaseCurrency(str) {
+  if (!str || typeof str !== 'string') return false;
+  if (str.length !== 3) return false;
+  for (let i = 0; i < 3; i += 1) {
+    const c = str.charCodeAt(i);
+    if (c < 65 || c > 90) return false; // A-Z only
+  }
+  return true;
+}
+
+function isAllowedChar(ch) {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  // space
+  if (code === 0x20) return true;
+  // digits 0-9
+  if (code >= 0x30 && code <= 0x39) return true;
+  // latin A-Z a-z
+  if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) return true;
+  // punctuation: hyphen, dot, comma, colon, underscore
+  if (code === 0x2d || code === 0x2e || code === 0x2c || code === 0x3a || code === 0x5f) return true;
+  // cyrillic ranges (basic + extended)
+  if ((code >= 0x0400 && code <= 0x04ff) || (code >= 0x0500 && code <= 0x052f)) return true;
+  return false;
+}
+
+function sanitizeInvoiceText(input, fallback) {
+  try {
+    const src = typeof input === 'string' ? input : '';
+    const maxLen = 32;
+    let out = '';
+    for (let i = 0; i < src.length && out.length < maxLen; i += 1) {
+      const ch = src[i];
+      const code = ch.charCodeAt(0);
+      // Convert new lines to space; skip other control chars
+      if (code === 0x0a || code === 0x0d) { // \n or \r
+        if (out.length === 0 || out[out.length - 1] !== ' ') out += ' ';
+        continue;
+      }
+      if (code < 0x20) continue; // skip other control characters
+      if (isAllowedChar(ch)) {
+        out += ch;
+      }
+      // other characters are skipped
+    }
+    out = out.trim();
+    if (!out) return fallback;
+    return out;
+  } catch (e) {
+    return fallback;
+  }
+}
+
 function buildTelegramPriceData(settings) {
+  // Validate currency strictly: 3 uppercase letters
   const currencyRaw = settings && settings.currency ? String(settings.currency) : '';
   const currency3 = currencyRaw.trim().toUpperCase();
-  if (!currency3 || currency3.length !== 3) {
+  if (!isUppercaseCurrency(currency3)) {
     const err = new Error('Invalid currency. Must be 3 uppercase letters.');
     err.code = 'VALIDATION_CURRENCY';
     throw err;
   }
 
+  // Validate amount: positive integer in minor units
   const amountNum = Number(settings && settings.amount);
   const amountInt = Math.trunc(amountNum);
   if (!Number.isFinite(amountNum) || amountInt <= 0 || amountNum !== amountInt) {
@@ -55,11 +112,12 @@ function buildTelegramPriceData(settings) {
     throw err;
   }
 
-  let label = (settings && settings.title ? String(settings.title) : 'Payment').trim();
-  if (!label) label = 'Payment';
-  if (label.length > 32) label = label.slice(0, 32);
+  // Sanitize title and label according to Telegram requirements
+  const titleSrc = settings && settings.title ? settings.title : 'Payment';
+  const title = sanitizeInvoiceText(titleSrc, 'Payment');
+  const label = sanitizeInvoiceText(titleSrc, 'Item');
 
-  return { amountInt, currency3, label };
+  return { amountInt, currency3, title, label };
 }
 
 async function handleStartCommand(msg) {
@@ -78,7 +136,6 @@ async function handlePayCommand(msg) {
     const settings = cachedSettings || (await loadSettings());
     const chatId = msg.chat && msg.chat.id ? msg.chat.id : null;
     const userId = msg.from && msg.from.id ? msg.from.id : null;
-
     if (!chatId) return;
 
     if (!hasValidTokens(settings)) {
@@ -86,12 +143,13 @@ async function handlePayCommand(msg) {
       return;
     }
 
-    let amountInt, currency3, label;
+    let amountInt, currency3, label, title;
     try {
       const validated = buildTelegramPriceData(settings);
       amountInt = validated.amountInt;
       currency3 = validated.currency3;
       label = validated.label;
+      title = validated.title;
     } catch (valErr) {
       const code = valErr && valErr.code ? valErr.code : '';
       if (code === 'VALIDATION_AMOUNT') {
@@ -117,7 +175,7 @@ async function handlePayCommand(msg) {
     const payload = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const expiresAt = now.add(10, 'minute').toDate();
 
-    const invoiceTitle = label; // keep within 32 chars
+    const invoiceTitle = title; // sanitized and <= 32 chars
 
     const payment = await Payment.create({
       chatId,
@@ -132,6 +190,23 @@ async function handlePayCommand(msg) {
     });
 
     const prices = [{ label: label, amount: amountInt }];
+
+    // Extended context logging BEFORE sending invoice
+    console.log('[BotService] sendInvoice context', {
+      chatIdType: typeof chatId,
+      currency: currency3,
+      currencyLen: currency3.length,
+      amountInt,
+      amountType: typeof amountInt,
+      title,
+      titleLen: title.length,
+      label,
+      labelLen: label.length,
+      pricesIsArray: Array.isArray(prices),
+      pricesLength: prices.length,
+      price0Type: typeof prices[0],
+      price0AmountType: typeof prices[0].amount,
+    });
 
     try {
       const message = await bot.sendInvoice(
@@ -157,13 +232,16 @@ async function handlePayCommand(msg) {
         currency: currency3,
         amountInt,
         amountType: typeof amountInt,
+        title,
+        titleLen: title.length,
         label,
+        labelLen: label.length,
         prices: JSON.stringify(prices),
       };
       console.error('[BotService] sendInvoice error:', errSend && errSend.message ? errSend.message : errSend, context);
       await bot.sendMessage(
         chatId,
-        'Не удалось создать счёт. Проверьте валюту (3 заглавные буквы), сумму (целое число в минорных единицах) и название (до 32 символов). Администратору: см. логи сервера.'
+        'Не удалось создать счёт. Проверьте валюту (3 заглавные буквы), сумму (целое число в минорных единицах) и название (до 32 символов, без переводов строк). Администратору: проверьте логи сервера.'
       );
     }
   } catch (err) {
