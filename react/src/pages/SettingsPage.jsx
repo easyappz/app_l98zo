@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Card, Row, Col, Form, Input, InputNumber, Button, Space, Typography, message } from 'antd';
+import { Card, Row, Col, Form, Input, InputNumber, Button, Space, Typography, message, Select } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSettings, updateSettings } from '../api/settings';
 
@@ -8,7 +8,15 @@ const { Title, Paragraph, Text } = Typography;
 export default function SettingsPage() {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
-  const { data, isFetching } = useQuery({ queryKey: ['settings'], queryFn: getSettings });
+
+  const { data, isFetching, error: settingsError } = useQuery({ queryKey: ['settings'], queryFn: getSettings, staleTime: 30000 });
+
+  useEffect(() => {
+    if (settingsError) {
+      const errMsg = settingsError?.response?.data?.error?.message || 'Не удалось загрузить настройки';
+      message.error(errMsg);
+    }
+  }, [settingsError]);
 
   useEffect(() => {
     if (data) {
@@ -18,7 +26,7 @@ export default function SettingsPage() {
         title: data.title || '',
         description: data.description || '',
         currency: data.currency || 'RUB',
-        amount: typeof data.amount === 'number' ? data.amount : 0,
+        amount: typeof data.amount === 'number' ? data.amount : undefined,
         successMessage: data.successMessage || ''
       });
     }
@@ -27,11 +35,12 @@ export default function SettingsPage() {
   const { mutateAsync, isPending } = useMutation({
     mutationFn: updateSettings,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
       message.success('Настройки сохранены');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
-    onError: () => {
-      message.error('Не удалось сохранить настройки');
+    onError: (error) => {
+      const errMsg = error?.response?.data?.error?.message || 'Не удалось сохранить настройки';
+      message.error(errMsg);
     }
   });
 
@@ -80,7 +89,10 @@ export default function SettingsPage() {
             </Col>
             <Col xs={24} md={12}>
               <Form.Item name="currency" label="Валюта" rules={[{ required: true, message: 'Укажите валюту' }]}> 
-                <Input placeholder="Например: RUB" />
+                <Select
+                  options={[{ label: 'RUB', value: 'RUB' }]}
+                  placeholder="Выберите валюту"
+                />
               </Form.Item>
             </Col>
 
@@ -91,12 +103,25 @@ export default function SettingsPage() {
             </Col>
 
             <Col xs={24} md={12}>
-              <Form.Item name="amount" label={
-                <span>
-                  Сумма, минорные единицы (<Text type="secondary">копейки</Text>)
-                </span>
-              } rules={[{ required: true, message: 'Укажите сумму' }]}> 
-                <InputNumber style={{ width: '100%' }} min={0} step={1} placeholder="Например: 19900 (это 199.00)" />
+              <Form.Item
+                name="amount"
+                label={
+                  <span>
+                    Сумма, минорные единицы (<Text type="secondary">копейки</Text>)
+                  </span>
+                }
+                rules={[
+                  { required: true, message: 'Укажите сумму' },
+                  {
+                    validator: (_, value) => {
+                      if (value === undefined || value === null) return Promise.resolve();
+                      if (Number(value) > 0) return Promise.resolve();
+                      return Promise.reject(new Error('Сумма должна быть больше 0'));
+                    }
+                  }
+                ]}
+              > 
+                <InputNumber style={{ width: '100%' }} min={1} step={1} placeholder="Например: 19900 (это 199.00)" />
               </Form.Item>
             </Col>
 
