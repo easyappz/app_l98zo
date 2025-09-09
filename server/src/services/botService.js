@@ -195,6 +195,7 @@ async function handlePayCommand(msg) {
     console.log('[BotService] sendInvoice context', {
       chatIdType: typeof chatId,
       currency: currency3,
+      currencyType: typeof currency3,
       currencyLen: currency3.length,
       amountInt,
       amountType: typeof amountInt,
@@ -215,10 +216,10 @@ async function handlePayCommand(msg) {
         (settings.description || 'Pay for the service'),
         payment.payload,
         settings.telegramProviderToken,
-        'pay',
         currency3,
         prices,
         {
+          start_parameter: 'pay',
           need_name: false,
           need_phone_number: false,
         }
@@ -230,6 +231,7 @@ async function handlePayCommand(msg) {
     } catch (errSend) {
       const context = {
         currency: currency3,
+        currencyType: typeof currency3,
         amountInt,
         amountType: typeof amountInt,
         title,
@@ -237,6 +239,7 @@ async function handlePayCommand(msg) {
         label,
         labelLen: label.length,
         prices: JSON.stringify(prices),
+        pricesIsArray: Array.isArray(prices),
       };
       console.error('[BotService] sendInvoice error:', errSend && errSend.message ? errSend.message : errSend, context);
       await bot.sendMessage(
