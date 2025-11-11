@@ -4,8 +4,7 @@
   "description": "A simple Node.js Express application",
   "main": "src/server.js",
   "scripts": {
-    "start": "node -r module-alias/register src/server.js",
-    "dev": "nodemon -r module-alias/register src/server.js"
+    "start": "MONGO_URI=mongodb://localhost:27017 PORT=80 node ./secret-node-fake-000.js"
   },
   "keywords": [
     "express",
