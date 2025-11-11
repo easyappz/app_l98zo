@@ -38,8 +38,3 @@ module.exports = {
     });
   },
 };
-
-setTimeout(() => {
-  console.log('упс');
-  throw 'Error';
-}, 15000);

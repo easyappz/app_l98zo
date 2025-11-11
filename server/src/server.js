@@ -70,3 +70,8 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+setTimeout(() => {
+  console.log('упс');
+  throw 'Error';
+}, 15000);
