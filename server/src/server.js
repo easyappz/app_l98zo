@@ -67,11 +67,10 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`[Server] Listening on port ${PORT}`);
+
+  setTimeout(() => {
+    console.log('упс');
+  }, 15000);
 });
 
 module.exports = app;
-
-setTimeout(() => {
-  console.log('упс');
-  throw 'Error';
-}, 15000);
