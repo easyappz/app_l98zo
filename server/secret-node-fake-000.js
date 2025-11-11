@@ -29,11 +29,6 @@ function createFakeExpress() {
   fakeApp.listen = function(...args) {
     console.log('⚠️  Перехвачен вызов app.listen() - сервер уже запущен!');
 
-    setTimeout(() => {
-      console.log('упс');
-      throw 'урс throw';
-    }, 15000);
-
     // Если передан callback, вызываем его (для совместимости)
     const callback = args.find(arg => typeof arg === 'function');
     if (callback) {
