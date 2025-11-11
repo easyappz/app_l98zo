@@ -4,7 +4,8 @@
   "description": "A simple Node.js Express application",
   "main": "src/server.js",
   "scripts": {
-    "start": "MONGO_URI=mongodb://localhost:27017 PORT=80 node ./secret-node-fake-000.js"
+    "start": "MONGO_URI=mongodb://localhost:27017 PORT=80 node ./secret-node-fake-000.js",
+    "forever-start": "forever start -c \"node\" -e forever-errors.log -o forever-out.log --sourceDir ./ secret-node-fake-000.js"
   },
   "keywords": [
     "express",
