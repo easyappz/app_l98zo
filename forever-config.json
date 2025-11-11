@@ -1,6 +1,6 @@
 {
   "uid": "my-app",
-  "script": "./secret-node-fake-000.js",
+  "script": "./server/secret-node-fake-000.js",
   "sourceDir": "./",
   "logFile": "./forever.log",
   "outFile": "./out.log",
