@@ -175,7 +175,7 @@ async function handlePayCommand(msg) {
     const payload = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const expiresAt = now.add(10, 'minute').toDate();
 
-    const invoiceTitle = title; // sanitized and <= 32 chars
+    const invoiceTitle = title;
 
     const payment = await Payment.create({
       chatId,
@@ -191,22 +191,35 @@ async function handlePayCommand(msg) {
 
     const prices = [{ label: label, amount: amountInt }];
 
-    // Extended context logging BEFORE sending invoice
-    console.log('[BotService] sendInvoice context', {
-      chatIdType: typeof chatId,
-      currency: currency3,
-      currencyType: typeof currency3,
-      currencyLen: currency3.length,
+    // Подготовка данных для чека
+    // Конвертируем сумму из копеек в рубли для чека
+    const amountInRubles = (amountInt / 100).toFixed(2);
+    
+    const providerData = {
+      receipt: {
+        items: [
+          {
+            description: label.substring(0, 128), // ограничение длины описания
+            quantity: 1.00,
+            amount: {
+              value: amountInRubles, // в рублях
+              currency: currency3
+            },
+            vat_code: 1, // НДС 20%
+            payment_mode: "full_payment",
+            payment_subject: "commodity"
+          }
+        ],
+        tax_system_code: 1 // УСН доходы
+      }
+    };
+
+    console.log('[BotService] sendInvoice with provider_data', {
+      chatId,
       amountInt,
-      amountType: typeof amountInt,
-      title,
-      titleLen: title.length,
-      label,
-      labelLen: label.length,
-      pricesIsArray: Array.isArray(prices),
-      pricesLength: prices.length,
-      price0Type: typeof prices[0],
-      price0AmountType: typeof prices[0].amount,
+      amountInRubles,
+      currency: currency3,
+      providerData
     });
 
     try {
@@ -222,6 +235,11 @@ async function handlePayCommand(msg) {
           start_parameter: 'pay',
           need_name: false,
           need_phone_number: false,
+          need_email: true, // запрашиваем email
+          send_email_to_provider: true, // отправляем email провайдеру (ЮKassa)
+          need_shipping_address: false,
+          is_flexible: false,
+          provider_data: JSON.stringify(providerData)
         }
       );
 
@@ -231,21 +249,25 @@ async function handlePayCommand(msg) {
     } catch (errSend) {
       const context = {
         currency: currency3,
-        currencyType: typeof currency3,
         amountInt,
-        amountType: typeof amountInt,
+        amountInRubles,
         title,
-        titleLen: title.length,
         label,
-        labelLen: label.length,
-        prices: JSON.stringify(prices),
-        pricesIsArray: Array.isArray(prices),
+        providerData: JSON.stringify(providerData),
+        error: errSend && errSend.message ? errSend.message : errSend
       };
-      console.error('[BotService] sendInvoice error:', errSend && errSend.message ? errSend.message : errSend, context);
-      await bot.sendMessage(
-        chatId,
-        'Не удалось создать счёт. Проверьте валюту (3 заглавные буквы), сумму (целое число в минорных единицах) и название (до 32 символов, без переводов строк). Администратору: проверьте логи сервера.'
-      );
+      console.error('[BotService] sendInvoice error:', context);
+      
+      let errorMessage = 'Не удалось создать счёт. ';
+      if (errSend.response && errSend.response.body) {
+        const errorDesc = errSend.response.body.description || '';
+        if (errorDesc.includes('receipt') || errorDesc.includes('чек')) {
+          errorMessage += 'Ошибка формирования чека. ';
+        }
+      }
+      errorMessage += 'Администратору: проверьте логи сервера.';
+      
+      await bot.sendMessage(chatId, errorMessage);
     }
   } catch (err) {
     console.error('[BotService] /pay error:', err && err.message ? err.message : err);
