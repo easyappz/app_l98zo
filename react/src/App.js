@@ -9,7 +9,7 @@ const { Header, Content } = Layout;
 
 function AdminLayout() {
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', width: '100%' }}>
       <Layout>
         <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center' }}>
           <Typography.Title level={4} style={{ margin: 0 }}>
@@ -19,6 +19,8 @@ function AdminLayout() {
         <Content style={{ margin: 24 }}>
           <div style={{ background: '#fff', borderRadius: 8, padding: 24 }}>
             <SettingsPage />
+            <br />
+            <br />
             <br />
             <StatsPage />
           </div>
