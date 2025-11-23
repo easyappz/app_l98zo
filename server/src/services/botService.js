@@ -276,8 +276,6 @@ async function handlePayCommand(msg) {
         amountInRubles,
         title,
         label,
-        providerData: JSON.stringify(providerData),
-        error: errSend && errSend.message ? errSend.message : errSend
       };
       console.error('[BotService] sendInvoice error:', context);
       
