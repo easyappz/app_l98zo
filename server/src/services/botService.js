@@ -214,35 +214,15 @@ async function handlePayCommand(msg) {
 
     const prices = [{ label: label, amount: amountInt }];
 
-    // Подготовка данных для чека
-    // Конвертируем сумму из копеек в рубли для чека
-    const amountInRubles = (amountInt / 100).toFixed(2);
-    
+    // Убираем receipt из provider_data, так как он требует email
     const providerData = {
-      receipt: {
-        items: [
-          {
-            description: label.substring(0, 128), // ограничение длины описания
-            quantity: 1.00,
-            amount: {
-              value: amountInRubles, // в рублях
-              currency: currency3
-            },
-            vat_code: 1, // НДС 20%
-            payment_mode: "full_payment",
-            payment_subject: "commodity"
-          }
-        ],
-        tax_system_code: 1 // УСН доходы
-      }
+      // receipt больше не отправляем
     };
 
-    console.log('[BotService] sendInvoice with provider_data', {
+    console.log('[BotService] sendInvoice without receipt to avoid email requirement', {
       chatId,
       amountInt,
-      amountInRubles,
-      currency: currency3,
-      providerData
+      currency: currency3
     });
 
     try {
@@ -258,8 +238,8 @@ async function handlePayCommand(msg) {
           start_parameter: 'pay',
           need_name: false,
           need_phone_number: false,
-          need_email: true, // запрашиваем email
-          send_email_to_provider: true, // отправляем email провайдеру (ЮKassa)
+          need_email: false, // НЕ запрашиваем email
+          send_email_to_provider: false, // НЕ отправляем email провайдеру
           need_shipping_address: false,
           is_flexible: false,
           provider_data: JSON.stringify(providerData)
@@ -273,7 +253,6 @@ async function handlePayCommand(msg) {
       const context = {
         currency: currency3,
         amountInt,
-        amountInRubles,
         title,
         label,
       };
@@ -282,9 +261,7 @@ async function handlePayCommand(msg) {
       let errorMessage = 'Не удалось создать счёт. ';
       if (errSend.response && errSend.response.body) {
         const errorDesc = errSend.response.body.description || '';
-        if (errorDesc.includes('receipt') || errorDesc.includes('чек')) {
-          errorMessage += 'Ошибка формирования чека. ';
-        }
+        errorMessage += `Ошибка: ${errorDesc}. `;
       }
       errorMessage += 'Администратору: проверьте логи сервера.';
       
