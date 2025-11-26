@@ -15,7 +15,6 @@ async function resendSuccessMessage(req, res) {
     // Находим последний успешный платеж для этого chatId
     const payment = await Payment.findOne({ 
       chatId: Number(chatId), 
-      status: 'succeeded' 
     }).sort({ createdAt: -1 });
 
     if (!payment) {
