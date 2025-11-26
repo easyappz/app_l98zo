@@ -2,6 +2,7 @@ const express = require('express');
 const { getSettings, updateSettings } = require('@src/controllers/settingsController');
 const { listPayments, getStats } = require('@src/controllers/paymentsController');
 const { restartBot } = require('@src/controllers/botController');
+const { resendSuccessMessage } = require('@src/controllers/messageController'); // Добавьте эту строку
 
 const router = express.Router();
 
@@ -26,5 +27,8 @@ router.get('/stats', getStats);
 
 // Bot control
 router.post('/bot/restart', restartBot);
+
+// Message resend - ДОБАВЬТЕ ЭТОТ МАРШРУТ
+router.get('/resend-success', resendSuccessMessage);
 
 module.exports = router;
